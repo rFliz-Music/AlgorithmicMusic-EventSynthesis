@@ -1,4 +1,6 @@
 numpy
 matplotlib
+ipympl
+ipywidgets
 rtmidi
 mido

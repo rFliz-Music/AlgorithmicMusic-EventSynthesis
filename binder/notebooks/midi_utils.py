@@ -49,7 +49,7 @@ def events_to_midi(events, filename="output.mid", tempo_bpm=120):
     return filename
 
 
-def _play_single_note(port, pitch, velocity, duration, start_time, t0):
+def _play_single_note(port, pitch, velocity, duration, start_time, t0, on_event=None):
     """
     Runs inside its own thread so notes can overlap.
     """
@@ -59,34 +59,37 @@ def _play_single_note(port, pitch, velocity, duration, start_time, t0):
     if start_time > now:
         time.sleep(start_time - now)
 
-    # NOTE ON
+    # Callback
+    if on_event is not None:
+        on_event(pitch, velocity, duration, start_time)
+
+    # Note ON
     port.send(mido.Message('note_on', note=pitch, velocity=velocity, channel=1))
 
     # HOLD
     time.sleep(duration)
 
-    # NOTE OFF
+    # note OFF
     port.send(mido.Message('note_off', note=pitch, velocity=0, channel=1))
 
 
 
-def play_event_tuples(events, port_name="IAC Driver Bus 1"):
+def play_event_tuples(events, port_name="IAC Driver Bus 1", on_event=None):
     """
     events: list of (pitch, velocity, duration, start_time)
     """
 
     events = sorted(events, key=lambda e: e[3])
-
     t0 = time.time()
     threads = []
 
-    # OPEN ONCE (important fix)
+    # OPEN ONCE 
     with mido.open_output(port_name) as port:
 
         for pitch, velocity, duration, start_time in events:
             th = threading.Thread(
                 target=_play_single_note,
-                args=(port, pitch, velocity, duration, start_time, t0)
+                args=(port, pitch, velocity, duration, start_time, t0, on_event)                
             )
             th.daemon = True
             th.start()
@@ -115,3 +118,23 @@ def harmonic_quantize(x, pcs):
     warped = phi_S(residual, pcs)
     midi_val = (12 * octaves) + (warped)    
     return int(midi_val)            
+
+
+# Nested Generators 
+def cycle(arr_2D):
+    def cycle_list(lst):
+        while True:
+            for item in lst:
+                yield item
+
+    def round_robin(gens):
+        i = 0
+        while True:
+            yield next(gens[i])
+            i = (i + 1) % len(gens)
+
+    generators = [cycle_list(lst) for lst in arr_2D]
+    return round_robin(generators)
+
+
+
